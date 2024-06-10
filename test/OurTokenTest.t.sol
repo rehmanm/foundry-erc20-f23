@@ -1,9 +1,13 @@
 //// SPDX-License-Identifier: MIT
 pragma solidity ^0.8.23;
 
-import {Test} from "forge-std/Test.sol";
+import {Test, console} from "forge-std/Test.sol";
 import {DeployOurToken} from "../script/DeployOurToken.s.sol";
 import {OurToken} from "../src/OurToken.sol";
+
+interface MintableToken {
+    function mint(address, uint256) external;
+}
 
 contract OurTokenTest is Test {
     OurToken public ourToken;
@@ -23,6 +27,11 @@ contract OurTokenTest is Test {
         vm.prank(deployerAddress);
 
         ourToken.transfer(bob, BOB_STARTING_BALANCE);
+    }
+
+    function testUsersCantMint() public {
+        vm.expectRevert();
+        MintableToken(address(ourToken)).mint(address(this), 1);
     }
 
     function testBobBalance() public view {
@@ -47,7 +56,29 @@ contract OurTokenTest is Test {
         );
     }
 
-    function testInitialSupply() public {
+    function testInitialSupply() public view {
         assertEq(ourToken.totalSupply(), deployer.INITIAL_SUPPLY());
+    }
+
+    function testTransferFuzz(uint64 transferAmount) external {
+        vm.assume(transferAmount >= 0 && transferAmount <= 90);
+        //uint256 transferAmount = 90 ether;
+
+        // Alice transfers 100 tokens to Bob
+        vm.prank(bob);
+        ourToken.transfer(alice, transferAmount);
+
+        // Check balances
+        uint256 aliceBalance = ourToken.balanceOf(alice);
+        uint256 bobBalance = ourToken.balanceOf(bob);
+        assertEq(aliceBalance, transferAmount);
+        assertEq(bobBalance, BOB_STARTING_BALANCE - transferAmount);
+    }
+
+    function testCannotTransferMoreThanAvailable() public {
+        uint256 transferAmount = 10000 ether;
+        vm.expectRevert();
+        vm.prank(bob);
+        ourToken.transfer(alice, transferAmount);
     }
 }
